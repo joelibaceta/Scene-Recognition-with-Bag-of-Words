@@ -89,13 +89,10 @@ def build_vocabulary(image_paths, vocab_size):
     print("Extract SIFT features (parallelized)")
     
     # Optimización: usar solo una muestra de imágenes y paralelizar
-    sample_rate = 10  # Usar 1 de cada 10 imágenes
     step_size = 15    # Más grande = menos features = más rápido
     
     # Seleccionar imágenes a procesar
-    sampled_paths = [path for i, path in enumerate(image_paths) if i % sample_rate == 0]
-    print(f"Processing {len(sampled_paths)} images in parallel...")
-    
+
     # Procesar en paralelo usando todos los cores disponibles
     n_jobs = multiprocessing.cpu_count()
     print(f"Using {n_jobs} CPU cores")
@@ -103,7 +100,7 @@ def build_vocabulary(image_paths, vocab_size):
     start_extract = time()
     bag_of_features = Parallel(n_jobs=n_jobs, verbose=5)(
         delayed(extract_features_from_image)(path, step_size) 
-        for path in sampled_paths
+        for path in image_paths
     )
     
     bag_of_features = np.concatenate(bag_of_features, axis=0).astype('float32')

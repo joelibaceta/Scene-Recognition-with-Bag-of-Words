@@ -1,33 +1,36 @@
 """
-Get bags of BRIEF features for image classification
+Build vocabulary using BRIEF descriptors from pyBRIEF
 """
 from PIL import Image
 import numpy as np
-from scipy.spatial import distance
-import pickle
+from sklearn.cluster import MiniBatchKMeans
 from time import time
-import pyBRIEF
+from pybrief import PyBrief
+import multiprocessing
 
-def get_bags_of_brief(image_paths, vocab_file='vocab_brief.pkl'):
+
+def build_vocabulary_brief(image_paths, vocab_size, max_descriptors_per_image=100):
     """
-    Extract BRIEF features and create bag-of-words histograms.
+    Extract BRIEF descriptors from training images and cluster them with kmeans.
     
     Args:
-        image_paths: list of image paths
-        vocab_file: path to vocabulary file
+        image_paths: list of training image paths
+        vocab_size: number of clusters desired
+        max_descriptors_per_image: limit descriptors per image for speed
         
     Returns:
-        image_feats: (N, vocab_size) feature matrix
+        vocab: cluster centers (vocab_size, descriptor_dim)
     """
-    with open(vocab_file, 'rb') as handle:
-        vocab = pickle.load(handle)
+    bag_of_features = []
+    pyBRIEF = PyBrief()
+    n_jobs = multiprocessing.cpu_count()
+
+    print(f"Extract BRIEF features usando {n_jobs} cores")
     
-    image_feats = []
-    
-    start_time = time()
-    print("Construct bags of BRIEF...")
-    
-    for path in image_paths:
+    for i, path in enumerate(image_paths):
+        if i % 100 == 0:
+            print(f"Procesando imagen {i}/{len(image_paths)}")
+            
         img = np.asarray(Image.open(path), dtype='uint8')
         
         # Convert to grayscale if needed
@@ -37,33 +40,42 @@ def get_bags_of_brief(image_paths, vocab_file='vocab_brief.pkl'):
             img_gray = img
             
         # Extract BRIEF descriptors
-        keypoints, descriptors = pyBRIEF.detectAndCompute(img_gray)
+        keypoints, descriptors = pyBRIEF.detect_and_describe(img_gray)
         
-        if descriptors is None or len(descriptors) == 0:
-            # If no descriptors, create zero histogram
-            hist_norm = np.zeros(len(vocab))
-        else:
-            # Convert to float for distance calculation
-            descriptors_float = descriptors.astype('float32')
+        if descriptors is not None and len(descriptors) > 0:
+            # Convertir descriptores binarios a float si es necesario
+            if descriptors.dtype != np.float32:
+                descriptors = descriptors.astype('float32')
             
-            # Find nearest vocabulary word for each descriptor
-            dist = distance.cdist(vocab, descriptors_float, metric='euclidean')
-            idx = np.argmin(dist, axis=0)
-            
-            # Create histogram
-            hist, bin_edges = np.histogram(idx, bins=len(vocab), range=(0, len(vocab)))
-            
-            # Normalize histogram
-            if np.sum(hist) > 0:
-                hist_norm = hist.astype('float32') / np.sum(hist)
-            else:
-                hist_norm = hist.astype('float32')
-        
-        image_feats.append(hist_norm)
-        
-    image_feats = np.asarray(image_feats)
+            # Limitar número de descriptores por imagen
+            if len(descriptors) > max_descriptors_per_image:
+                indices = np.random.choice(len(descriptors), max_descriptors_per_image, replace=False)
+                descriptors = descriptors[indices]
+            bag_of_features.append(descriptors)
+    
+    # Concatenate all descriptors
+    bag_of_features = np.concatenate(bag_of_features, axis=0).astype('float32')
+    
+    print(f"Compute vocab from {len(bag_of_features)} BRIEF descriptors")
+    start_time = time()
+    
+    # Use MiniBatchKMeans for faster clustering
+    kmeans_model = MiniBatchKMeans(
+        n_clusters=vocab_size,
+        init='k-means++',
+        batch_size=1000,
+        n_init=10,
+        max_iter=300,
+        random_state=42,
+        verbose=1,
+        compute_labels=False  # Más rápido si solo necesitas centroides
+    )
+    
+    kmeans_model.fit(bag_of_features)
+    vocab = kmeans_model.cluster_centers_
     
     end_time = time()
-    print(f"It takes {end_time - start_time:.2f} seconds to construct bags of BRIEF.")
+    print(f"It takes {end_time - start_time:.2f} seconds to compute vocab.")
+    print(f"Vocabulario shape: {vocab.shape}")
     
-    return image_feats
+    return vocab

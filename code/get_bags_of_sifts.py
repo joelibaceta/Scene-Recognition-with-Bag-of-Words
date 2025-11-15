@@ -43,7 +43,8 @@ def get_bags_of_sifts(image_paths):
     # Función auxiliar para procesar una imagen
     def process_image(path, vocab):
         img = np.asarray(Image.open(path), dtype='float32')
-        frames, descriptors = dsift(img, step=[1,1], fast=True)
+        # Usar step más grande para ser más rápido (5,5 en lugar de 1,1)
+        frames, descriptors = dsift(img, step=[5,5], fast=True)
         dist = distance.cdist(vocab, descriptors, metric='euclidean')
         idx = np.argmin(dist, axis=0)
         hist, bin_edges = np.histogram(idx, bins=len(vocab))
