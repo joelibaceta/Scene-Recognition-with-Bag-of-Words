@@ -6,6 +6,8 @@ import scipy.spatial.distance as distance
 # Usar OpenCV en lugar de cyvlfeat
 from cv2_sift_utils import dsift
 from time import time
+from joblib import Parallel, delayed
+import multiprocessing
 import pdb
 
 def get_bags_of_sifts(image_paths):
@@ -38,25 +40,32 @@ def get_bags_of_sifts(image_paths):
     with open('vocab.pkl', 'rb') as handle:
         vocab = pickle.load(handle)
     
-    image_feats = []
-    
-    start_time = time()
-    print("Construct bags of sifts...")
-    
-    for path in image_paths:
-        img = np.asarray(Image.open(path),dtype='float32')
+    # Función auxiliar para procesar una imagen
+    def process_image(path, vocab):
+        img = np.asarray(Image.open(path), dtype='float32')
         frames, descriptors = dsift(img, step=[1,1], fast=True)
         dist = distance.cdist(vocab, descriptors, metric='euclidean')
         idx = np.argmin(dist, axis=0)
         hist, bin_edges = np.histogram(idx, bins=len(vocab))
         hist_norm = [float(i)/sum(hist) for i in hist]
-        
-        image_feats.append(hist_norm)
-        
+        return hist_norm
+    
+    start_time = time()
+    print("Construct bags of sifts (parallelized)...")
+    
+    # Procesar en paralelo
+    n_jobs = multiprocessing.cpu_count()
+    print(f"Using {n_jobs} CPU cores")
+    
+    image_feats = Parallel(n_jobs=n_jobs, verbose=5)(
+        delayed(process_image)(path, vocab) 
+        for path in image_paths
+    )
+    
     image_feats = np.asarray(image_feats)
     
     end_time = time()
-    print("It takes ", (start_time - end_time), " to construct bags of sifts.")
+    print(f"Bag of SIFT construction took {end_time - start_time:.2f}s")
     
     #############################################################################
     #                                END OF YOUR CODE                           #
