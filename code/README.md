@@ -177,4 +177,3 @@ Not surprisiingly, tiny image features and nearest neighbor classifier has the w
 
 ## Credits
 This project is modified by Chia-Hung Yuan based on Min Sun, James Hays and Derek Hoiem's previous developed projects 
-.
