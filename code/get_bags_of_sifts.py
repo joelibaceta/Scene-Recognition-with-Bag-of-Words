@@ -3,7 +3,8 @@ import numpy as np
 from scipy.spatial import distance
 import pickle
 import scipy.spatial.distance as distance
-from cyvlfeat.sift.dsift import dsift
+# Usar OpenCV en lugar de cyvlfeat
+from cv2_sift_utils import dsift
 from time import time
 import pdb
 

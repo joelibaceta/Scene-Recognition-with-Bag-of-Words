@@ -1,7 +1,7 @@
 from PIL import Image
 import numpy as np
-from cyvlfeat.sift.dsift import dsift
-from cyvlfeat.kmeans import kmeans
+# Usar OpenCV en lugar de cyvlfeat
+from cv2_sift_utils import dsift, kmeans
 from time import time
 
 import pdb
