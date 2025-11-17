@@ -6,7 +6,7 @@ import numpy as np
 from scipy.spatial import distance
 import pickle
 from time import time
-import pySURF
+from pysurf import PySurf
 
 def get_bags_of_surf(image_paths, vocab_file='vocab_surf.pkl'):
     """
@@ -23,6 +23,8 @@ def get_bags_of_surf(image_paths, vocab_file='vocab_surf.pkl'):
         vocab = pickle.load(handle)
     
     image_feats = []
+
+    pySURF = PySurf()
     
     start_time = time()
     print("Construct bags of SURF...")
@@ -37,7 +39,7 @@ def get_bags_of_surf(image_paths, vocab_file='vocab_surf.pkl'):
             img_gray = img
             
         # Extract SURF descriptors
-        keypoints, descriptors = pySURF.detectAndCompute(img_gray)
+        keypoints, descriptors = pySURF.detect_and_describe(img_gray)
         
         if descriptors is None or len(descriptors) == 0:
             # If no descriptors, create zero histogram

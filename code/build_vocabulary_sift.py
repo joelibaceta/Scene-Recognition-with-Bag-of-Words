@@ -11,23 +11,7 @@ import pdb
 #This function will sample SIFT descriptors from the training images,
 #cluster them with kmeans, and then return the cluster centers.
 
-def build_vocabulary(image_paths, vocab_size):
-    ##################################################################################
-    # TODO:                                                                          #
-    # Load images from the training set. To save computation time, you don't         #
-    # necessarily need to sample from all images, although it would be better        #
-    # to do so. You can randomly sample the descriptors from each image to save      #
-    # memory and speed up the clustering. Or you can simply call vl_dsift with       #
-    # a large step size here.                                                        #
-    #                                                                                #
-    # For each loaded image, get some SIFT features. You don't have to get as        #
-    # many SIFT features as you will in get_bags_of_sift.py, because you're only     #
-    # trying to get a representative sample here.                                    #
-    #                                                                                #
-    # Once you have tens of thousands of SIFT features from many training            #
-    # images, cluster them with kmeans. The resulting centroids are now your         #
-    # visual word vocabulary.                                                        #
-    ##################################################################################
+def build_vocabulary_sift(image_paths, vocab_size):
     ##################################################################################
     # NOTE: Some useful functions                                                    #
     # This function will sample SIFT descriptors from the training images,           #
@@ -112,10 +96,5 @@ def build_vocabulary(image_paths, vocab_size):
     vocab = kmeans(bag_of_features, vocab_size, initialization="PLUSPLUS")        
     end_time = time()
     print("K-means clustering took ", (end_time - start_time), " seconds.")
-    
-    
-    ##################################################################################
-    #                                END OF YOUR CODE                                #
-    ##################################################################################
     
     return vocab

@@ -6,7 +6,7 @@ import pickle
 
 from get_image_paths import get_image_paths
 from get_tiny_images import get_tiny_images
-from build_vocabulary import build_vocabulary
+from build_vocabulary_sift import build_vocabulary_sift
 from get_bags_of_sifts import get_bags_of_sifts
 from visualize import visualize
 
@@ -88,7 +88,7 @@ def main():
         if os.path.isfile('vocab.pkl') is False:
             print('No existing visual word vocabulary found. Computing one from training images\n')
             vocab_size = 400   ### Vocab_size is up to you. Larger values will work better (to a point) but be slower to comput.
-            vocab = build_vocabulary(train_image_paths, vocab_size)
+            vocab = build_vocabulary_sift(train_image_paths, vocab_size)
             with open('vocab.pkl', 'wb') as handle:
                 pickle.dump(vocab, handle, protocol=pickle.HIGHEST_PROTOCOL)
 

@@ -6,6 +6,7 @@ import numpy as np
 from sklearn.cluster import MiniBatchKMeans
 from time import time
 from pybrief import PyBrief
+import cv2
 import multiprocessing
 
 
@@ -23,6 +24,8 @@ def build_vocabulary_brief(image_paths, vocab_size, max_descriptors_per_image=10
     """
     bag_of_features = []
     pyBRIEF = PyBrief()
+    # BRIEF solo describe, necesitamos un detector (usamos FAST)
+    detector = cv2.FastFeatureDetector_create()
     n_jobs = multiprocessing.cpu_count()
 
     print(f"Extract BRIEF features usando {n_jobs} cores")
@@ -38,25 +41,32 @@ def build_vocabulary_brief(image_paths, vocab_size, max_descriptors_per_image=10
             img_gray = np.dot(img[...,:3], [0.2989, 0.5870, 0.1140]).astype('uint8')
         else:
             img_gray = img
-            
-        # Extract BRIEF descriptors
-        keypoints, descriptors = pyBRIEF.detect_and_describe(img_gray)
         
-        if descriptors is not None and len(descriptors) > 0:
-            # Convertir descriptores binarios a float si es necesario
-            if descriptors.dtype != np.float32:
-                descriptors = descriptors.astype('float32')
+        # 1. Detectar keypoints con FAST
+        keypoints_cv = detector.detect(img_gray, None)
+        
+        if keypoints_cv is not None and len(keypoints_cv) > 0:
+            # Convertir keypoints de OpenCV a formato numpy (y, x)
+            keypoints = np.array([[int(kp.pt[1]), int(kp.pt[0])] for kp in keypoints_cv])
             
-            # Limitar número de descriptores por imagen
-            if len(descriptors) > max_descriptors_per_image:
-                indices = np.random.choice(len(descriptors), max_descriptors_per_image, replace=False)
-                descriptors = descriptors[indices]
-            bag_of_features.append(descriptors)
+            # 2. Describir con BRIEF
+            _, descriptors = pyBRIEF.compute(img_gray, keypoints)
+            
+            if descriptors is not None and len(descriptors) > 0:
+                # Convertir descriptores binarios (uint8) a float32 para K-means
+                descriptors = descriptors.astype('float32')
+                
+                # Limitar número de descriptores por imagen
+                if len(descriptors) > max_descriptors_per_image:
+                    indices = np.random.choice(len(descriptors), max_descriptors_per_image, replace=False)
+                    descriptors = descriptors[indices]
+                bag_of_features.append(descriptors)
     
     # Concatenate all descriptors
     bag_of_features = np.concatenate(bag_of_features, axis=0).astype('float32')
     
     print(f"Compute vocab from {len(bag_of_features)} BRIEF descriptors")
+    print(f"Descriptor shape: {bag_of_features.shape}")
     start_time = time()
     
     # Use MiniBatchKMeans for faster clustering
@@ -68,7 +78,7 @@ def build_vocabulary_brief(image_paths, vocab_size, max_descriptors_per_image=10
         max_iter=300,
         random_state=42,
         verbose=1,
-        compute_labels=False  # Más rápido si solo necesitas centroides
+        compute_labels=False
     )
     
     kmeans_model.fit(bag_of_features)

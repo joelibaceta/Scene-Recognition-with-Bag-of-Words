@@ -10,7 +10,7 @@ from joblib import Parallel, delayed
 import multiprocessing
 import pdb
 
-def get_bags_of_sifts(image_paths):
+def get_bags_of_sifts(image_paths, vocab_file='vocab_sift.pkl'):
     ############################################################################
     # TODO:                                                                    #
     # This function assumes that 'vocab.pkl' exists and contains an N x 128    #
@@ -37,7 +37,7 @@ def get_bags_of_sifts(image_paths):
         image_feats : (N, d) feature, each row represent a feature of an image
     '''
     
-    with open('vocab.pkl', 'rb') as handle:
+    with open(vocab_file, 'rb') as handle:
         vocab = pickle.load(handle)
     
     # Función auxiliar para procesar una imagen
