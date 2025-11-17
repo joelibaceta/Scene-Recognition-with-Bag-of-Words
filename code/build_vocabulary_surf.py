@@ -7,7 +7,44 @@ from sklearn.cluster import MiniBatchKMeans
 from time import time
 from pysurf import PySurf
 import multiprocessing
+from joblib import Parallel, delayed
 
+def extract_surf_from_image(path, max_descriptors=100):
+    """
+    Extract SURF descriptors from a single image.
+    This function will be called in parallel.
+    """
+    try:
+        # Initialize PySurf for this worker
+        surf = PySurf(
+            hessian_thresh=0.0005,
+            n_scales=5,
+            edge_threshold=20.0,
+            upright=False
+        )
+        
+        img = np.asarray(Image.open(path), dtype='uint8')
+        
+        # Convert to grayscale
+        if len(img.shape) == 3:
+            img_gray = np.dot(img[...,:3], [0.2989, 0.5870, 0.1140]).astype('uint8')
+        else:
+            img_gray = img
+            
+        # Extract SURF
+        keypoints, descriptors = surf.detect_and_describe(img_gray)
+        
+        if descriptors is not None and len(descriptors) > 0:
+            # Limit descriptors per image
+            if len(descriptors) > max_descriptors:
+                indices = np.random.choice(len(descriptors), max_descriptors, replace=False)
+                descriptors = descriptors[indices]
+            return descriptors
+        else:
+            return None
+    except Exception as e:
+        print(f"Error processing {path}: {e}")
+        return None
 
 def build_vocabulary_surf(image_paths, vocab_size, max_descriptors_per_image=100):
     """
@@ -22,32 +59,21 @@ def build_vocabulary_surf(image_paths, vocab_size, max_descriptors_per_image=100
         vocab: cluster centers (vocab_size, descriptor_dim)
     """
     bag_of_features = []
-    pySURF = PySurf()
+    pySURF = PySurf(
+        hessian_thresh=0.0005,
+        n_scales=5,
+        edge_threshold=20.0,
+        upright=False
+    )
     n_jobs = multiprocessing.cpu_count()
 
     print(f"Extract SURF features usando {n_jobs} cores")
     
-    for i, path in enumerate(image_paths):
-        if i % 100 == 0:
-            print(f"Procesando imagen {i}/{len(image_paths)}")
-            
-        img = np.asarray(Image.open(path), dtype='uint8')
-        
-        # Convert to grayscale if needed
-        if len(img.shape) == 3:
-            img_gray = np.dot(img[...,:3], [0.2989, 0.5870, 0.1140]).astype('uint8')
-        else:
-            img_gray = img
-            
-        # Extract SURF descriptors
-        keypoints, descriptors = pySURF.detect_and_describe(img_gray)
-        
-        if descriptors is not None and len(descriptors) > 0:
-            # Limitar número de descriptores por imagen
-            if len(descriptors) > max_descriptors_per_image:
-                indices = np.random.choice(len(descriptors), max_descriptors_per_image, replace=False)
-                descriptors = descriptors[indices]
-            bag_of_features.append(descriptors)
+    bag_of_features = Parallel(n_jobs=n_jobs, verbose=10, backend='loky')(
+        delayed(extract_surf_from_image)(path, max_descriptors_per_image) 
+        for path in image_paths
+    )
+    
     
     # Concatenate all descriptors
     bag_of_features = np.concatenate(bag_of_features, axis=0).astype('float32')
