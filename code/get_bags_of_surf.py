@@ -24,7 +24,13 @@ def get_bags_of_surf(image_paths, vocab_file='vocab_surf.pkl'):
     
     image_feats = []
 
-    pySURF = PySurf()
+    # Use lower threshold for better detection in low-contrast images
+    pySURF = PySurf(
+        hessian_thresh=0.0001,  # Reduced from default 0.004
+        n_scales=5,
+        edge_threshold=20.0,
+        upright=False
+    )
     
     start_time = time()
     print("Construct bags of SURF...")

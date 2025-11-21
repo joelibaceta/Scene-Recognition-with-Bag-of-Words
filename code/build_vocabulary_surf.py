@@ -16,8 +16,9 @@ def extract_surf_from_image(path, max_descriptors=100):
     """
     try:
         # Initialize PySurf for this worker
+        # Use lower threshold for better detection in low-contrast images
         surf = PySurf(
-            hessian_thresh=0.0005,
+            hessian_thresh=0.0001,  # Reduced from 0.0005
             n_scales=5,
             edge_threshold=20.0,
             upright=False
@@ -59,12 +60,7 @@ def build_vocabulary_surf(image_paths, vocab_size, max_descriptors_per_image=100
         vocab: cluster centers (vocab_size, descriptor_dim)
     """
     bag_of_features = []
-    pySURF = PySurf(
-        hessian_thresh=0.0005,
-        n_scales=5,
-        edge_threshold=20.0,
-        upright=False
-    )
+    # Note: PySurf instances are created in worker processes
     n_jobs = multiprocessing.cpu_count()
 
     print(f"Extract SURF features usando {n_jobs} cores")
