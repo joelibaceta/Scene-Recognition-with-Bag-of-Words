@@ -1,6 +1,4 @@
-"""
-Build vocabulary using BRIEF descriptors from pyBRIEF
-"""
+"""Build vocabulary using BRIEF descriptors from pyBRIEF"""
 from PIL import Image
 import numpy as np
 from sklearn.cluster import MiniBatchKMeans
@@ -8,32 +6,18 @@ from time import time
 from pybrief import PyBrief
 import cv2
 import multiprocessing
+from joblib import Parallel, delayed
 
 
-def build_vocabulary_brief(image_paths, vocab_size, max_descriptors_per_image=100):
+def extract_brief_from_image(path, max_descriptors=100):
     """
-    Extract BRIEF descriptors from training images and cluster them with kmeans.
-    
-    Args:
-        image_paths: list of training image paths
-        vocab_size: number of clusters desired
-        max_descriptors_per_image: limit descriptors per image for speed
+    Extract BRIEF descriptors from a single image.
+    This function will be called in parallel.
+    """
+    try:
+        pyBRIEF = PyBrief()
+        detector = cv2.FastFeatureDetector_create()
         
-    Returns:
-        vocab: cluster centers (vocab_size, descriptor_dim)
-    """
-    bag_of_features = []
-    pyBRIEF = PyBrief()
-    # BRIEF solo describe, necesitamos un detector (usamos FAST)
-    detector = cv2.FastFeatureDetector_create()
-    n_jobs = multiprocessing.cpu_count()
-
-    print(f"Extract BRIEF features usando {n_jobs} cores")
-    
-    for i, path in enumerate(image_paths):
-        if i % 100 == 0:
-            print(f"Procesando imagen {i}/{len(image_paths)}")
-            
         img = np.asarray(Image.open(path), dtype='uint8')
         
         # Convert to grayscale if needed
@@ -57,12 +41,44 @@ def build_vocabulary_brief(image_paths, vocab_size, max_descriptors_per_image=10
                 descriptors = descriptors.astype('float32')
                 
                 # Limitar número de descriptores por imagen
-                if len(descriptors) > max_descriptors_per_image:
-                    indices = np.random.choice(len(descriptors), max_descriptors_per_image, replace=False)
+                if len(descriptors) > max_descriptors:
+                    indices = np.random.choice(len(descriptors), max_descriptors, replace=False)
                     descriptors = descriptors[indices]
-                bag_of_features.append(descriptors)
+                return descriptors
+        return None
+    except Exception as e:
+        print(f"Error processing {path}: {e}")
+        return None
+
+
+def build_vocabulary_brief(image_paths, vocab_size, max_descriptors_per_image=100):
+    """
+    Extract BRIEF descriptors from training images and cluster them with kmeans.
     
-    # Concatenate all descriptors
+    Args:
+        image_paths: list of training image paths
+        vocab_size: number of clusters desired
+        max_descriptors_per_image: limit descriptors per image for speed
+        
+    Returns:
+        vocab: cluster centers (vocab_size, descriptor_dim)
+    """
+    n_jobs = multiprocessing.cpu_count()
+    
+    print(f"Extract BRIEF features using {n_jobs} cores")
+    
+    # Parallel processing
+    bag_of_features = Parallel(n_jobs=n_jobs, verbose=10, backend='loky')(
+        delayed(extract_brief_from_image)(path, max_descriptors_per_image) 
+        for path in image_paths
+    )
+    
+    # Filter out None values and concatenate
+    bag_of_features = [desc for desc in bag_of_features if desc is not None]
+    
+    if not bag_of_features:
+        raise ValueError("No BRIEF descriptors extracted from any image!")
+    
     bag_of_features = np.concatenate(bag_of_features, axis=0).astype('float32')
     
     print(f"Compute vocab from {len(bag_of_features)} BRIEF descriptors")

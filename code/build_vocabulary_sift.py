@@ -6,44 +6,18 @@ from time import time
 from joblib import Parallel, delayed
 import multiprocessing
 
-import pdb
-
-#This function will sample SIFT descriptors from the training images,
-#cluster them with kmeans, and then return the cluster centers.
 
 def build_vocabulary_sift(image_paths, vocab_size):
-    ##################################################################################
-    # NOTE: Some useful functions                                                    #
-    # This function will sample SIFT descriptors from the training images,           #
-    # cluster them with kmeans, and then return the cluster centers.                 #
-    #                                                                                #
-    # Function : dsift()                                                             #
-    # SIFT_features is a N x 128 matrix of SIFT features                             #
-    # There are step, bin size, and smoothing parameters you can                     #
-    # manipulate for dsift(). We recommend debugging with the 'fast'                 #
-    # parameter. This approximate version of SIFT is about 20 times faster to        #
-    # compute. Also, be sure not to use the default value of step size. It will      #
-    # be very slow and you'll see relatively little performance gain from            #
-    # extremely dense sampling. You are welcome to use your own SIFT feature.        #
-    #                                                                                #
-    # Function : kmeans(X, K)                                                        #
-    # X is a M x d matrix of sampled SIFT features, where M is the number of         #
-    # features sampled. M should be pretty large!                                    #
-    # K is the number of clusters desired (vocab_size)                               #
-    # centers is a d x K matrix of cluster centroids.                                #
-    #                                                                                #
-    # NOTE:                                                                          #
-    #   e.g. 1. dsift(img, step=[?,?], fast=True)                                    #
-    #        2. kmeans( ? , vocab_size)                                              #  
-    #                                                                                #
-    # ################################################################################
-    '''
-    Input : 
-        image_paths : a list of training image path
-        vocal size : number of clusters desired
-    Output :
-        Clusters centers of Kmeans
-    '''
+    """
+    Extract SIFT descriptors from training images and cluster them with kmeans.
+    
+    Args:
+        image_paths: list of training image paths
+        vocab_size: number of clusters desired
+        
+    Returns:
+        vocab: cluster centers (vocab_size, descriptor_dim)
+    """
 
     '''   
     bag_of_features = []
@@ -64,25 +38,24 @@ def build_vocabulary_sift(image_paths, vocab_size):
     
     # Función auxiliar para procesar una imagen
     def extract_features_from_image(path, step_size=15):
-        img = np.asarray(Image.open(path), dtype='float32')
-        frames, descriptors = dsift(img, step=[step_size, step_size], fast=True)
-        return descriptors
+        try:
+            img = np.asarray(Image.open(path), dtype='float32')
+            frames, descriptors = dsift(img, step=[step_size, step_size], fast=True)
+            return descriptors
+        except Exception as e:
+            print(f"Error processing {path}: {e}")
+            return np.array([], dtype='float32').reshape(0, 128)
     
     bag_of_features = []
     
     print("Extract SIFT features (parallelized)")
+    step_size = 15
     
-    # Optimización: usar solo una muestra de imágenes y paralelizar
-    step_size = 15    # Más grande = menos features = más rápido
-    
-    # Seleccionar imágenes a procesar
-
-    # Procesar en paralelo usando todos los cores disponibles
     n_jobs = multiprocessing.cpu_count()
     print(f"Using {n_jobs} CPU cores")
     
     start_extract = time()
-    bag_of_features = Parallel(n_jobs=n_jobs, verbose=5)(
+    bag_of_features = Parallel(n_jobs=n_jobs, verbose=10, backend='loky')(
         delayed(extract_features_from_image)(path, step_size) 
         for path in image_paths
     )
@@ -95,6 +68,6 @@ def build_vocabulary_sift(image_paths, vocab_size):
     start_time = time()
     vocab = kmeans(bag_of_features, vocab_size, initialization="PLUSPLUS")        
     end_time = time()
-    print("K-means clustering took ", (end_time - start_time), " seconds.")
+    print(f"K-means clustering took {end_time - start_time:.2f}s")
     
     return vocab

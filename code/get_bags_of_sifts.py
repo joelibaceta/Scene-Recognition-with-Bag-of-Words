@@ -2,63 +2,58 @@ from PIL import Image
 import numpy as np
 from scipy.spatial import distance
 import pickle
-import scipy.spatial.distance as distance
 # Usar OpenCV en lugar de cyvlfeat
 from cv2_sift_utils import dsift
 from time import time
 from joblib import Parallel, delayed
 import multiprocessing
-import pdb
 
 def get_bags_of_sifts(image_paths, vocab_file='vocab_sift.pkl'):
-    ############################################################################
-    # TODO:                                                                    #
-    # This function assumes that 'vocab.pkl' exists and contains an N x 128    #
-    # matrix 'vocab' where each row is a kmeans centroid or visual word. This  #
-    # matrix is saved to disk rather than passed in a parameter to avoid       #
-    # recomputing the vocabulary every time at significant expense.            #
-                                                                    
-    # image_feats is an N x d matrix, where d is the dimensionality of the     #
-    # feature representation. In this case, d will equal the number of clusters#
-    # or equivalently the number of entries in each image's histogram.         #
+    """
+    Extract SIFT features and create bag-of-words histograms.
     
-    # You will want to construct SIFT features here in the same way you        #
-    # did in build_vocabulary.m (except for possibly changing the sampling     #
-    # rate) and then assign each local feature to its nearest cluster center   #
-    # and build a histogram indicating how many times each cluster was used.   #
-    # Don't forget to normalize the histogram, or else a larger image with more#
-    # SIFT features will look very different from a smaller version of the same#
-    # image.                                                                   #
-    ############################################################################
-    '''
-    Input : 
-        image_paths : a list(N) of training images
-    Output : 
-        image_feats : (N, d) feature, each row represent a feature of an image
-    '''
+    Args:
+        image_paths: list of image paths
+        vocab_file: path to vocabulary file
+        
+    Returns:
+        image_feats: (N, vocab_size) feature matrix
+    """
     
     with open(vocab_file, 'rb') as handle:
         vocab = pickle.load(handle)
     
     # Función auxiliar para procesar una imagen
     def process_image(path, vocab):
-        img = np.asarray(Image.open(path), dtype='float32')
-        # Usar step más grande para ser más rápido (5,5 en lugar de 1,1)
-        frames, descriptors = dsift(img, step=[5,5], fast=True)
-        dist = distance.cdist(vocab, descriptors, metric='euclidean')
-        idx = np.argmin(dist, axis=0)
-        hist, bin_edges = np.histogram(idx, bins=len(vocab))
-        hist_norm = [float(i)/sum(hist) for i in hist]
-        return hist_norm
+        try:
+            img = np.asarray(Image.open(path), dtype='float32')
+            # Usar step más grande para ser más rápido (5,5 en lugar de 1,1)
+            frames, descriptors = dsift(img, step=[5,5], fast=True)
+            
+            if descriptors is None or len(descriptors) == 0:
+                return np.zeros(len(vocab), dtype='float32')
+            
+            dist = distance.cdist(vocab, descriptors, metric='euclidean')
+            idx = np.argmin(dist, axis=0)
+            hist, _ = np.histogram(idx, bins=len(vocab), range=(0, len(vocab)))
+            
+            # Normalize histogram
+            if np.sum(hist) > 0:
+                return hist.astype('float32') / np.sum(hist)
+            else:
+                return hist.astype('float32')
+        except Exception as e:
+            print(f"Error processing {path}: {e}")
+            return np.zeros(len(vocab), dtype='float32')
     
     start_time = time()
-    print("Construct bags of sifts (parallelized)...")
+    print("Construct bags of SIFT (parallelized)...")
     
     # Procesar en paralelo
     n_jobs = multiprocessing.cpu_count()
     print(f"Using {n_jobs} CPU cores")
     
-    image_feats = Parallel(n_jobs=n_jobs, verbose=5)(
+    image_feats = Parallel(n_jobs=n_jobs, verbose=10, backend='loky')(
         delayed(process_image)(path, vocab) 
         for path in image_paths
     )
@@ -67,9 +62,5 @@ def get_bags_of_sifts(image_paths, vocab_file='vocab_sift.pkl'):
     
     end_time = time()
     print(f"Bag of SIFT construction took {end_time - start_time:.2f}s")
-    
-    #############################################################################
-    #                                END OF YOUR CODE                           #
-    #############################################################################
     
     return image_feats

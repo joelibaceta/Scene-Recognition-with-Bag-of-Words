@@ -1,6 +1,4 @@
-"""
-Get bags of BRIEF features for image classification
-"""
+"""Get bags of BRIEF features for image classification"""
 from PIL import Image
 import numpy as np
 from scipy.spatial import distance
@@ -8,34 +6,19 @@ import pickle
 from time import time
 from pybrief import PyBrief
 import cv2
+import multiprocessing
+from joblib import Parallel, delayed
 
-def get_bags_of_brief(image_paths, vocab_file='vocab_brief.pkl'):
+
+def extract_brief_histogram(path, vocab):
     """
-    Extract BRIEF features and create bag-of-words histograms.
-    
-    Args:
-        image_paths: list of image paths
-        vocab_file: path to vocabulary file
+    Extract BRIEF features and compute histogram for a single image.
+    This function will be called in parallel.
+    """
+    try:
+        pyBRIEF = PyBrief()
+        detector = cv2.FastFeatureDetector_create()
         
-    Returns:
-        image_feats: (N, vocab_size) feature matrix
-    """
-    with open(vocab_file, 'rb') as handle:
-        vocab = pickle.load(handle)
-
-    pyBRIEF = PyBrief()
-    # BRIEF solo describe, necesitamos un detector (usamos FAST)
-    detector = cv2.FastFeatureDetector_create()
-    
-    image_feats = []
-    
-    start_time = time()
-    print("Construct bags of BRIEF...")
-    
-    for i, path in enumerate(image_paths):
-        if i % 100 == 0:
-            print(f"Procesando imagen {i}/{len(image_paths)}")
-            
         img = np.asarray(Image.open(path), dtype='uint8')
         
         # Convert to grayscale if needed
@@ -57,8 +40,7 @@ def get_bags_of_brief(image_paths, vocab_file='vocab_brief.pkl'):
             descriptors = None
         
         if descriptors is None or len(descriptors) == 0:
-            # If no descriptors, create zero histogram
-            hist_norm = np.zeros(len(vocab))
+            return np.zeros(len(vocab), dtype='float32')
         else:
             # Convert to float for distance calculation
             descriptors_float = descriptors.astype('float32')
@@ -68,16 +50,43 @@ def get_bags_of_brief(image_paths, vocab_file='vocab_brief.pkl'):
             idx = np.argmin(dist, axis=0)
             
             # Create histogram
-            hist, bin_edges = np.histogram(idx, bins=len(vocab), range=(0, len(vocab)))
+            hist, _ = np.histogram(idx, bins=len(vocab), range=(0, len(vocab)))
             
             # Normalize histogram
             if np.sum(hist) > 0:
-                hist_norm = hist.astype('float32') / np.sum(hist)
+                return hist.astype('float32') / np.sum(hist)
             else:
-                hist_norm = hist.astype('float32')
+                return hist.astype('float32')
+    except Exception as e:
+        print(f"Error processing {path}: {e}")
+        return np.zeros(len(vocab), dtype='float32')
+
+
+def get_bags_of_brief(image_paths, vocab_file='vocab_brief.pkl'):
+    """
+    Extract BRIEF features and create bag-of-words histograms.
+    
+    Args:
+        image_paths: list of image paths
+        vocab_file: path to vocabulary file
         
-        image_feats.append(hist_norm)
-        
+    Returns:
+        image_feats: (N, vocab_size) feature matrix
+    """
+    with open(vocab_file, 'rb') as handle:
+        vocab = pickle.load(handle)
+    
+    n_jobs = multiprocessing.cpu_count()
+    
+    start_time = time()
+    print(f"Construct bags of BRIEF using {n_jobs} cores...")
+    
+    # Parallel processing
+    image_feats = Parallel(n_jobs=n_jobs, verbose=10, backend='loky')(
+        delayed(extract_brief_histogram)(path, vocab) 
+        for path in image_paths
+    )
+    
     image_feats = np.asarray(image_feats)
     
     end_time = time()

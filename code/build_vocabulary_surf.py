@@ -1,6 +1,4 @@
-"""
-Build vocabulary using SURF descriptors from pySURF
-"""
+"""Build vocabulary using SURF descriptors from pySURF"""
 from PIL import Image
 import numpy as np
 from sklearn.cluster import MiniBatchKMeans
