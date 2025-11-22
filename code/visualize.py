@@ -1,19 +1,21 @@
 import numpy as np
-import pdb
 import shutil
 import os
+from PIL import Image
+import matplotlib.pyplot as plt
 
-def visualize(CATEGORIES, test_image_paths, test_labels_ids, predicted_categories_ids, train_labels_paths, train_labels_ids):
+def visualize(CATEGORIES, test_image_paths, test_labels_ids, predicted_categories_ids, train_labels_paths, train_labels_ids, method_name='SIFT', show_images=True):
     main_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    thumbnails_path = os.path.join(main_path, 'results', 'thumbnails')
-    if os.path.isdir(thumbnails_path):
-        shutil.rmtree(thumbnails_path)
-        os.makedirs(thumbnails_path)
+    thumbnails_path = os.path.join(main_path, 'results', 'thumbnails', method_name.lower())
+    if not os.path.isdir(thumbnails_path):
+        os.makedirs(thumbnails_path, exist_ok=True)
 
     results_path = os.path.join(main_path, 'results')
     
-    panel = open(os.path.join(results_path, 'visualizatoin.md'), 'w')
-    panel.write('## Visualization\n')
+    # Crear archivo markdown
+    md_file = os.path.join(results_path, f'visualization_{method_name.lower()}.md')
+    panel = open(md_file, 'w')
+    panel.write(f'## Visualization - {method_name}\n')
     panel.write('| Category name | Sample training images | Sample true positives | False positives with true label | False negatives with wrong predicted label |\n')
     panel.write('| :-----------: | :--------------------: | :-------------------: | :-----------------------------: | :----------------------------------------: |\n')
 
@@ -21,6 +23,15 @@ def visualize(CATEGORIES, test_image_paths, test_labels_ids, predicted_categorie
     TP_name = [None] * len(CATEGORIES)
     FP_name = [None] * len(CATEGORIES)
     Train_name = [None] * len(CATEGORIES)
+    
+    # Si queremos mostrar en Jupyter, preparar figura
+    if show_images:
+        n_categories = min(5, len(CATEGORIES))  # Mostrar solo 5 categorías como ejemplo
+        fig, axes = plt.subplots(n_categories, 4, figsize=(16, 4*n_categories))
+        fig.suptitle(f'Visualización de Resultados - {method_name}', fontsize=16, fontweight='bold')
+        
+        if n_categories == 1:
+            axes = axes.reshape(1, -1)
 
     for k, name in enumerate(CATEGORIES):
         train_id = np.where(np.array(train_labels_ids) == k)[0].tolist()
@@ -52,5 +63,40 @@ def visualize(CATEGORIES, test_image_paths, test_labels_ids, predicted_categorie
         fn_path = os.path.relpath(os.path.join(thumbnails_path, name + '_FN_' + os.path.basename(FN_name[k])), results_path)
         panel.write('| ' + name + ' | ' + '![]('+train_path+')' + ' | ' + '![]('+tp_path+')' + ' | ' + '![]('+fp_path+')' + ' | ' + '![]('+fn_path+')' + ' |' + '\n')
         
+        # Mostrar en Jupyter (solo primeras 5 categorías)
+        if show_images and k < n_categories:
+            # Training image
+            img = Image.open(Train_name[k])
+            axes[k, 0].imshow(img)
+            axes[k, 0].set_title(f'{name}\nTraining', fontsize=10)
+            axes[k, 0].axis('off')
+            
+            # True Positive
+            if TP_name[k]:
+                img = Image.open(TP_name[k])
+                axes[k, 1].imshow(img)
+                axes[k, 1].set_title('True Positive', fontsize=10)
+                axes[k, 1].axis('off')
+            
+            # False Positive
+            if FP_name[k]:
+                img = Image.open(FP_name[k])
+                axes[k, 2].imshow(img)
+                axes[k, 2].set_title('False Positive', fontsize=10)
+                axes[k, 2].axis('off')
+            
+            # False Negative
+            if FN_name[k]:
+                img = Image.open(FN_name[k])
+                axes[k, 3].imshow(img)
+                axes[k, 3].set_title('False Negative', fontsize=10)
+                axes[k, 3].axis('off')
+        
     panel.write('\n')
     panel.close()
+    
+    if show_images:
+        plt.tight_layout()
+        plt.show()
+    
+    print(f"Visualización guardada en {md_file}")

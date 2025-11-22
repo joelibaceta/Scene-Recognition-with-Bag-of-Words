@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 
 from get_image_paths import get_image_paths
-from build_vocabulary import build_vocabulary
+from build_vocabulary_sift import build_vocabulary_sift
 from get_bags_of_sifts import get_bags_of_sifts
 from build_vocabulary_surf import build_vocabulary_surf
 from get_bags_of_surf import get_bags_of_surf
@@ -73,13 +73,13 @@ def evaluate_feature(feature_name, train_image_paths, test_image_paths,
         vocab_file = 'vocab_sift.pkl'
         if not os.path.isfile(vocab_file):
             print('Building SIFT vocabulary...')
-            vocab = build_vocabulary(train_image_paths, VOCAB_SIZE)
+            vocab = build_vocabulary_sift(train_image_paths, VOCAB_SIZE)
             with open(vocab_file, 'wb') as handle:
                 pickle.dump(vocab, handle, protocol=pickle.HIGHEST_PROTOCOL)
         
         # Extract features
         if not os.path.isfile('train_feats_sift.pkl'):
-            train_image_feats = get_bags_of_sifts(train_image_paths)
+            train_image_feats = get_bags_of_sifts(train_image_paths, vocab_file)
             with open('train_feats_sift.pkl', 'wb') as handle:
                 pickle.dump(train_image_feats, handle, protocol=pickle.HIGHEST_PROTOCOL)
         else:
@@ -87,7 +87,7 @@ def evaluate_feature(feature_name, train_image_paths, test_image_paths,
                 train_image_feats = pickle.load(handle)
         
         if not os.path.isfile('test_feats_sift.pkl'):
-            test_image_feats = get_bags_of_sifts(test_image_paths)
+            test_image_feats = get_bags_of_sifts(test_image_paths, vocab_file)
             with open('test_feats_sift.pkl', 'wb') as handle:
                 pickle.dump(test_image_feats, handle, protocol=pickle.HIGHEST_PROTOCOL)
         else:
